@@ -4,4 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+indicatif = "0.17.11"
 sha2 = "0.10.0"
+text-colorizer = "1.0.0"
+walkdir = "2.5.0"

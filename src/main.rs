@@ -1,22 +1,37 @@
+use indicatif::ProgressIterator;
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
+use std::env;
+use std::fmt;
 use std::fs;
 use std::io;
-use std::io::Error;
 use std::io::Read;
 use std::path::Path;
+use text_colorizer::*;
+use walkdir::WalkDir;
 
 fn main() {
-    let paths = vec!["./.gitignore"];
+    let args = parse_args();
 
-    for p in paths {
-        let path = Path::new(&p);
-        dbg!(hash_bytes(&read_file(path).unwrap()));
-        dbg!(hash_filestream(path).unwrap());
+    let mut hashes: HashMap<String, Vec<String>> = HashMap::new();
+
+    for file in WalkDir::new(args.root_dir.clone())
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        if file.metadata().unwrap().is_file() {
+            let hash = hash_filestream(&file.path()).unwrap();
+            hashes
+                .entry(hash)
+                .or_insert_with(Vec::new)
+                .push(file.path().display().to_string());
+        }
     }
+    dbg!(hashes);
 }
 
-fn read_file(path: &Path) -> Result<Vec<u8>, Error> {
-    let bytes = fs::read(path)?;
+fn read_file(path: &Path) -> Result<Vec<u8>, io::Error> {
+    let bytes: Vec<u8> = fs::read(path)?;
     Ok(bytes)
 }
 
@@ -45,9 +60,45 @@ fn hash_filestream(path: &Path) -> io::Result<String> {
     Ok(format!("{:x}", result))
 }
 
-// fn print_type_of<T>(_: &T) {
-//     println!("{}", std::any::type_name::<T>());
-// }
+fn print_type_of<T>(_: &T) {
+    println!("{}", std::any::type_name::<T>());
+}
+
+#[derive(Debug)]
+struct Args {
+    root_dir: String,
+}
+
+impl fmt::Display for Args {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "root_dir: {}", self.root_dir)
+    }
+}
+
+fn parse_args() -> Args {
+    let args: Vec<String> = env::args().skip(1).collect();
+
+    if args.len() != 1 {
+        print_usage();
+        eprintln!(
+            "{} wrong number of args: expected 1 got {}. ",
+            "Error:".bold().red(),
+            args.len()
+        );
+        std::process::exit(1);
+    }
+    Args {
+        root_dir: args[0].clone(),
+    }
+}
+
+fn print_usage() {
+    eprintln!(
+        "{} - Create directories for each file type",
+        "file_sorter".green()
+    );
+    eprintln!("Usage: file_sorter <ROOT_DIR>");
+}
 
 #[cfg(test)]
 mod tests {
