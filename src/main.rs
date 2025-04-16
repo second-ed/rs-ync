@@ -1,4 +1,3 @@
-use indicatif::ProgressIterator;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::env;
@@ -15,16 +14,18 @@ fn main() {
 
     let mut hashes: HashMap<String, Vec<String>> = HashMap::new();
 
-    for file in WalkDir::new(args.root_dir.clone())
+    for file in WalkDir::new(args.root_dir)
         .into_iter()
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_file())
     {
-        if file.metadata().unwrap().is_file() {
-            let hash = hash_filestream(&file.path()).unwrap();
+        let path = file.path();
+
+        if let Ok(hash) = hash_filestream(&path) {
             hashes
                 .entry(hash)
-                .or_insert_with(Vec::new)
-                .push(file.path().display().to_string());
+                .or_default()
+                .push(path.display().to_string());
         }
     }
     dbg!(hashes);
