@@ -21,7 +21,7 @@ fn main() {
     {
         let path = file.path();
 
-        if let Ok(hash) = hash_filestream(&path) {
+        if let Ok(hash) = hash_filestream(path) {
             hashes
                 .entry(hash)
                 .or_default()
