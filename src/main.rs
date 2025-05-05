@@ -71,7 +71,7 @@ struct Args {
 }
 
 impl Args {
-    fn new() {
+    fn new() -> Args {
         let args: Vec<String> = env::args().skip(1).collect();
 
         if args.len() != 1 {
