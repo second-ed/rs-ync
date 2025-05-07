@@ -12,22 +12,21 @@ use walkdir::WalkDir;
 fn main() {
     let args = Args::new();
 
-    let mut hashes: HashMap<String, Vec<String>> = HashMap::new();
-
-    for file in WalkDir::new(args.root_dir)
+    let hashes: HashMap<String, Vec<String>> = WalkDir::new(args.root_dir)
         .into_iter()
         .filter_map(Result::ok)
         .filter(|e| e.file_type().is_file())
-    {
-        let path = file.path();
+        .filter_map(|file| {
+            let path = file.path();
+            hash_filestream(path)
+                .ok()
+                .map(|hash| (hash, path.display().to_string()))
+        })
+        .fold(HashMap::new(), |mut acc, (hash, path)| {
+            acc.entry(hash).or_default().push(path);
+            acc
+        });
 
-        if let Ok(hash) = hash_filestream(path) {
-            hashes
-                .entry(hash)
-                .or_default()
-                .push(path.display().to_string());
-        }
-    }
     dbg!(hashes);
 }
 
