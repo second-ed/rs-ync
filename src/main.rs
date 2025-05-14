@@ -7,18 +7,24 @@ use std::io;
 use std::io::Read;
 use std::path::Path;
 use text_colorizer::*;
-use walkdir::WalkDir;
+use walkdir;
 
 fn main() {
     let args = Args::new();
+    process(args, list_files, hash_filestream)
+}
 
-    let hashes: HashMap<String, Vec<String>> = WalkDir::new(args.root_dir)
-        .into_iter()
+fn process(
+    args: Args,
+    list_fn: fn(&String) -> walkdir::IntoIter,
+    hash_fn: fn(&Path) -> io::Result<String>,
+) {
+    let hashes: HashMap<String, Vec<String>> = list_fn(&args.root_dir)
         .filter_map(Result::ok)
         .filter(|e| e.file_type().is_file())
         .filter_map(|file| {
             let path = file.path();
-            hash_filestream(path)
+            hash_fn(path)
                 .ok()
                 .map(|hash| (hash, path.display().to_string()))
         })
@@ -28,6 +34,10 @@ fn main() {
         });
 
     dbg!(hashes);
+}
+
+fn list_files(root_dir: &String) -> walkdir::IntoIter {
+    return walkdir::WalkDir::new(root_dir).into_iter();
 }
 
 fn read_file(path: &Path) -> Result<Vec<u8>, io::Error> {
