@@ -16,7 +16,7 @@ fn main() {
 
 fn process(
     args: Args,
-    list_fn: fn(&String) -> walkdir::IntoIter,
+    list_fn: fn(&String) -> Box<dyn Iterator<Item = walkdir::Result<walkdir::DirEntry>>>,
     hash_fn: fn(&Path) -> io::Result<String>,
 ) {
     let hashes: HashMap<String, Vec<String>> = list_fn(&args.root_dir)
@@ -36,8 +36,8 @@ fn process(
     dbg!(hashes);
 }
 
-fn list_files(root_dir: &String) -> walkdir::IntoIter {
-    return walkdir::WalkDir::new(root_dir).into_iter();
+fn list_files(path: &String) -> Box<dyn Iterator<Item = walkdir::Result<walkdir::DirEntry>>> {
+    Box::new(walkdir::WalkDir::new(path).into_iter())
 }
 
 fn read_file(path: &Path) -> Result<Vec<u8>, io::Error> {
