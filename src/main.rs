@@ -12,6 +12,7 @@ fn main() {
         ("dir/file_1.txt", "hello"),
         ("dir/file_2.txt", "hello"),
         ("dir/file_3.txt", "world"),
+        ("dir/some_file.rs", "let mut thing = Vec::new()"),
         ("other_dir/file4.rs", "let x = 4;"),
         ("other_dir/file_5.txt", "hello"),
         ("other_dir/file_7.txt", "hello"),
@@ -28,7 +29,24 @@ fn main() {
     let dst_paths: Vec<PathBuf> = fake_fs.list_files(Path::new(&args.dst_dir)).collect();
     let dst_hashes = dbg!(get_hashes_map(&fake_fs, dst_paths));
 
-    dbg!(plan_file_movements(&args, &src_hashes, &dst_hashes));
+    let file_plan = dbg!(plan_file_movements(&args, &src_hashes, &dst_hashes));
+
+    for op in file_plan {
+        match op {
+            FileOp::MoveFile {
+                src_path: src_path,
+                dst_path: dst_path,
+            } => fake_fs.move_file(&src_path, &dst_path),
+            FileOp::CopyFile {
+                src_path: src_path,
+                dst_path: dst_path,
+            } => fake_fs.copy_file(&src_path, &dst_path),
+            FileOp::DeleteFile { path: path } => fake_fs.delete_file(&path),
+        }
+        .expect("{op} operation failed");
+    }
+    dbg!(fake_fs.files);
+    dbg!(fake_fs.operations);
 }
 
 fn get_hashes_map(fs: &impl FileSystem, paths: Vec<PathBuf>) -> HashMap<String, Vec<PathBuf>> {
@@ -52,43 +70,41 @@ fn plan_file_movements(
 
     for (hash, src_paths) in src_hashes {
         let src_path = &src_paths[0];
-
         match dst_hashes.get(hash) {
             Some(dst_paths) => {
-                let dst_name = dst_paths
-                    .iter()
-                    .find(|p| p.file_name() == src_path.file_name());
+                let dst_path = &dst_paths[0];
 
-                match dst_name {
-                    Some(_) => {
-                        // Already exists with the same name
-                    }
-                    None => {
-                        let dst_path = &dst_paths[0];
-
-                        file_ops.push(FileOp::MoveFile {
-                            src_path: dst_path.clone(),
-                            dst_path: dst_path.with_file_name(src_path.file_name().unwrap()),
-                        })
-                    }
+                // delete first to avoid renaming a file and then deleting it
+                for dst_extra in dst_paths.iter().skip(1) {
+                    file_ops.push(FileOp::DeleteFile {
+                        path: dst_extra.clone(),
+                    });
                 }
+
+                file_ops.push(FileOp::MoveFile {
+                    src_path: dst_path.clone(),
+                    dst_path: dst_path.with_file_name(src_path.file_name().unwrap()),
+                });
             }
-            // Doesn't exist in dst
             None => {
+                let dst_file = PathBuf::from(&args.dst_dir).join(src_path.file_name().unwrap());
                 file_ops.push(FileOp::CopyFile {
                     src_path: src_path.clone(),
-                    dst_path: replace_directory(&src_path, &args.dst_dir),
+                    dst_path: dst_file,
                 });
             }
         }
     }
 
     for (hash, dst_paths) in dst_hashes {
-        if !src_hashes.contains_key(hash) {
-            for dst_path in dst_paths {
-                file_ops.push(FileOp::DeleteFile {
-                    path: dst_path.clone(),
-                });
+        match src_hashes.get(hash) {
+            Some(_) => {}
+            None => {
+                for dst_path in dst_paths {
+                    file_ops.push(FileOp::DeleteFile {
+                        path: dst_path.clone(),
+                    });
+                }
             }
         }
     }
