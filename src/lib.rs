@@ -78,7 +78,7 @@ impl FileSystem for FakeFileSystem {
         &'a mut self,
         path: &'a Path,
     ) -> Box<dyn Iterator<Item = std::path::PathBuf> + 'a> {
-        self.operations.push(format!("list: {}", &path.display()));
+        self.operations.push(format!("list: `{}`", &path.display()));
         let base = path.to_path_buf();
         Box::new(
             self.files
@@ -92,7 +92,7 @@ impl FileSystem for FakeFileSystem {
         if let Some(content) = self.files.remove(from) {
             self.files.insert(to.to_path_buf(), content);
             self.operations
-                .push(format!("move: {} -> {}", from.display(), to.display()));
+                .push(format!("move: `{}` -> `{}`", from.display(), to.display()));
             Ok(())
         } else {
             Err(io::Error::new(io::ErrorKind::NotFound, "File not found"))
@@ -103,7 +103,7 @@ impl FileSystem for FakeFileSystem {
         if let Some(content) = self.files.get(from) {
             self.files.insert(to.to_path_buf(), content.clone());
             self.operations
-                .push(format!("copy: {} -> {}", from.display(), to.display()));
+                .push(format!("copy: `{}` -> `{}`", from.display(), to.display()));
             Ok(())
         } else {
             Err(io::Error::new(io::ErrorKind::NotFound, "File not found"))
@@ -112,7 +112,8 @@ impl FileSystem for FakeFileSystem {
 
     fn delete_file(&mut self, path: &Path) -> std::io::Result<()> {
         if self.files.remove(path).is_some() {
-            self.operations.push(format!("delete: {}", path.display()));
+            self.operations
+                .push(format!("delete: `{}`", path.display()));
             Ok(())
         } else {
             Err(io::Error::new(io::ErrorKind::NotFound, "File not found"))

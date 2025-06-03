@@ -60,6 +60,13 @@ fn plan_file_movements(
 
     for (hash, src_paths) in src_hashes {
         let src_path = &src_paths[0];
+
+        for src_extra in src_paths.iter().skip(1) {
+            file_ops.push(FileOp::DeleteFile {
+                path: src_extra.clone(),
+            });
+        }
+
         match dst_hashes.get(hash) {
             Some(dst_paths) => {
                 let dst_path = &dst_paths[0];
