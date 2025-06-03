@@ -59,9 +59,10 @@ fn plan_file_movements(
     let mut file_ops = Vec::new();
 
     for (hash, src_paths) in src_hashes {
-        let src_path = &src_paths[0];
+        let mut src_iter = src_paths.iter();
+        let src_path = src_iter.next().unwrap();
 
-        for src_extra in src_paths.iter().skip(1) {
+        for src_extra in src_iter {
             file_ops.push(FileOp::DeleteFile {
                 path: src_extra.clone(),
             });
@@ -69,21 +70,24 @@ fn plan_file_movements(
 
         match dst_hashes.get(hash) {
             Some(dst_paths) => {
-                let dst_path = &dst_paths[0];
+                let mut dst_iter = dst_paths.iter();
+                let dst_path = dst_iter.next().unwrap();
 
                 // delete first to avoid renaming a file and then deleting it
-                for dst_extra in dst_paths.iter().skip(1) {
+                for dst_extra in dst_iter {
                     file_ops.push(FileOp::DeleteFile {
                         path: dst_extra.clone(),
                     });
                 }
 
-                file_ops.push(FileOp::MoveFile {
-                    src_path: dst_path.clone(),
-                    dst_path: dst_path.with_file_name(src_path.file_name().unwrap()),
-                });
+                if src_path.file_name() != dst_path.file_name() {
+                    file_ops.push(FileOp::MoveFile {
+                        src_path: dst_path.clone(),
+                        dst_path: dst_path.with_file_name(src_path.file_name().unwrap()),
+                    });
+                }
             }
-            None => {
+            _ => {
                 let dst_file = PathBuf::from(&args.dst_dir).join(src_path.file_name().unwrap());
                 file_ops.push(FileOp::CopyFile {
                     src_path: src_path.clone(),
@@ -94,14 +98,11 @@ fn plan_file_movements(
     }
 
     for (hash, dst_paths) in dst_hashes {
-        match src_hashes.get(hash) {
-            Some(_) => {}
-            None => {
-                for dst_path in dst_paths {
-                    file_ops.push(FileOp::DeleteFile {
-                        path: dst_path.clone(),
-                    });
-                }
+        if !src_hashes.contains_key(hash) {
+            for dst_path in dst_paths {
+                file_ops.push(FileOp::DeleteFile {
+                    path: dst_path.clone(),
+                });
             }
         }
     }
