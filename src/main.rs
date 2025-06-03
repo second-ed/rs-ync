@@ -1,12 +1,12 @@
 use hash_files::{FakeFileSystem, FileSystem};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::{env, fmt};
+use std::{env, fmt, io};
 use text_colorizer::Colorize;
 
 fn main() {
     let args = Args::new();
-    let mut fake_fs = FakeFileSystem::new();
+    let mut file_sys = FakeFileSystem::new();
 
     let values = vec![
         ("dir/file_1.txt", "hello"),
@@ -20,41 +20,31 @@ fn main() {
     ];
 
     for (name, content) in values {
-        fake_fs.files.insert(name.into(), content.to_string());
+        file_sys.files.insert(name.into(), content.to_string());
     }
 
-    let src_paths: Vec<PathBuf> = fake_fs.list_files(Path::new(&args.src_dir)).collect();
-    let src_hashes = dbg!(get_hashes_map(&fake_fs, src_paths));
+    let src_paths: Vec<PathBuf> = file_sys.list_files(Path::new(&args.src_dir)).collect();
+    let src_hashes = dbg!(get_hashes_map(&file_sys, src_paths));
 
-    let dst_paths: Vec<PathBuf> = fake_fs.list_files(Path::new(&args.dst_dir)).collect();
-    let dst_hashes = dbg!(get_hashes_map(&fake_fs, dst_paths));
+    let dst_paths: Vec<PathBuf> = file_sys.list_files(Path::new(&args.dst_dir)).collect();
+    let dst_hashes = dbg!(get_hashes_map(&file_sys, dst_paths));
 
     let file_plan = dbg!(plan_file_movements(&args, &src_hashes, &dst_hashes));
+    let _ = execute_file_movement_plan(&mut file_sys, file_plan);
 
-    for op in file_plan {
-        match op {
-            FileOp::MoveFile {
-                src_path: src_path,
-                dst_path: dst_path,
-            } => fake_fs.move_file(&src_path, &dst_path),
-            FileOp::CopyFile {
-                src_path: src_path,
-                dst_path: dst_path,
-            } => fake_fs.copy_file(&src_path, &dst_path),
-            FileOp::DeleteFile { path: path } => fake_fs.delete_file(&path),
-        }
-        .expect("{op} operation failed");
-    }
-    dbg!(fake_fs.files);
-    dbg!(fake_fs.operations);
+    dbg!(file_sys.files);
+    dbg!(file_sys.operations);
 }
 
-fn get_hashes_map(fs: &impl FileSystem, paths: Vec<PathBuf>) -> HashMap<String, Vec<PathBuf>> {
+fn get_hashes_map(
+    file_sys: &impl FileSystem,
+    paths: Vec<PathBuf>,
+) -> HashMap<String, Vec<PathBuf>> {
     let mut hashes: HashMap<String, Vec<PathBuf>> = HashMap::new();
 
     for file in paths {
         hashes
-            .entry(fs.hash_file(&file).unwrap())
+            .entry(file_sys.hash_file(&file).unwrap())
             .or_default()
             .push(file);
     }
@@ -111,11 +101,19 @@ fn plan_file_movements(
     file_ops
 }
 
-fn replace_directory(src_path: &PathBuf, dst_dir: &PathBuf) -> PathBuf {
-    match src_path.file_name() {
-        Some(file_name) => dst_dir.join(file_name),
-        None => dst_dir.to_path_buf(), // fallback: no file name
+fn execute_file_movement_plan(
+    file_sys: &mut impl FileSystem,
+    file_plan: Vec<FileOp>,
+) -> Result<(), io::Error> {
+    for op in file_plan {
+        match op {
+            FileOp::MoveFile { src_path, dst_path } => file_sys.move_file(&src_path, &dst_path),
+            FileOp::CopyFile { src_path, dst_path } => file_sys.copy_file(&src_path, &dst_path),
+            FileOp::DeleteFile { path } => file_sys.delete_file(&path),
+        }
+        .expect("{op} operation failed");
     }
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -133,6 +131,7 @@ enum FileOp {
     },
 }
 
+// cli stuff
 #[derive(Debug)]
 struct Args {
     src_dir: PathBuf,
