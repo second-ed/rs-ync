@@ -1,7 +1,8 @@
-use hash_files::{FakeFileSystem, FileSystem};
-use std::collections::HashMap;
+use hash_files::{
+    execute_file_movement_plan, get_hashes_map, plan_file_movements, FakeFileSystem, FileSystem,
+};
 use std::path::{Path, PathBuf};
-use std::{env, fmt, io};
+use std::{env, fmt};
 use text_colorizer::Colorize;
 
 fn main() {
@@ -29,114 +30,11 @@ fn main() {
     let dst_paths: Vec<PathBuf> = file_sys.list_files(Path::new(&args.dst_dir)).collect();
     let dst_hashes = dbg!(get_hashes_map(&file_sys, dst_paths));
 
-    let file_plan = dbg!(plan_file_movements(&args, &src_hashes, &dst_hashes));
+    let file_plan = dbg!(plan_file_movements(&args.dst_dir, &src_hashes, &dst_hashes));
     let _ = execute_file_movement_plan(&mut file_sys, file_plan);
 
     dbg!(file_sys.files);
     dbg!(file_sys.operations);
-}
-
-fn get_hashes_map(
-    file_sys: &impl FileSystem,
-    paths: Vec<PathBuf>,
-) -> HashMap<String, Vec<PathBuf>> {
-    let mut hashes: HashMap<String, Vec<PathBuf>> = HashMap::new();
-
-    for file in paths {
-        hashes
-            .entry(file_sys.hash_file(&file).unwrap())
-            .or_default()
-            .push(file);
-    }
-    hashes
-}
-
-fn plan_file_movements(
-    args: &Args,
-    src_hashes: &HashMap<String, Vec<PathBuf>>,
-    dst_hashes: &HashMap<String, Vec<PathBuf>>,
-) -> Vec<FileOp> {
-    let mut file_ops = Vec::new();
-
-    for (hash, src_paths) in src_hashes {
-        let mut src_iter = src_paths.iter();
-        let src_path = src_iter.next().unwrap();
-
-        for src_extra in src_iter {
-            file_ops.push(FileOp::DeleteFile {
-                path: src_extra.clone(),
-            });
-        }
-
-        match dst_hashes.get(hash) {
-            Some(dst_paths) => {
-                let mut dst_iter = dst_paths.iter();
-                let dst_path = dst_iter.next().unwrap();
-
-                // delete first to avoid renaming a file and then deleting it
-                for dst_extra in dst_iter {
-                    file_ops.push(FileOp::DeleteFile {
-                        path: dst_extra.clone(),
-                    });
-                }
-
-                if src_path.file_name() != dst_path.file_name() {
-                    file_ops.push(FileOp::MoveFile {
-                        src_path: dst_path.clone(),
-                        dst_path: dst_path.with_file_name(src_path.file_name().unwrap()),
-                    });
-                }
-            }
-            _ => {
-                let dst_file = PathBuf::from(&args.dst_dir).join(src_path.file_name().unwrap());
-                file_ops.push(FileOp::CopyFile {
-                    src_path: src_path.clone(),
-                    dst_path: dst_file,
-                });
-            }
-        }
-    }
-
-    for (hash, dst_paths) in dst_hashes {
-        if !src_hashes.contains_key(hash) {
-            for dst_path in dst_paths {
-                file_ops.push(FileOp::DeleteFile {
-                    path: dst_path.clone(),
-                });
-            }
-        }
-    }
-    file_ops
-}
-
-fn execute_file_movement_plan(
-    file_sys: &mut impl FileSystem,
-    file_plan: Vec<FileOp>,
-) -> Result<(), io::Error> {
-    for op in file_plan {
-        match op {
-            FileOp::MoveFile { src_path, dst_path } => file_sys.move_file(&src_path, &dst_path),
-            FileOp::CopyFile { src_path, dst_path } => file_sys.copy_file(&src_path, &dst_path),
-            FileOp::DeleteFile { path } => file_sys.delete_file(&path),
-        }
-        .expect("{op} operation failed");
-    }
-    Ok(())
-}
-
-#[derive(Debug)]
-enum FileOp {
-    CopyFile {
-        src_path: PathBuf,
-        dst_path: PathBuf,
-    },
-    MoveFile {
-        src_path: PathBuf,
-        dst_path: PathBuf,
-    },
-    DeleteFile {
-        path: PathBuf,
-    },
 }
 
 // cli stuff
