@@ -1,12 +1,13 @@
-use hash_files::{
-    execute_file_movement_plan, get_hashes_map, plan_file_movements, FakeFileSystem, FileSystem,
-};
+use hash_files::{FakeFileSystem, FileSystem};
+use polars::prelude::*;
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::{env, fmt};
 use text_colorizer::Colorize;
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::new();
+
     let mut file_sys = FakeFileSystem::new();
 
     let values = vec![
@@ -25,16 +26,76 @@ fn main() {
     }
 
     let src_paths: Vec<PathBuf> = file_sys.list_files(Path::new(&args.src_dir)).collect();
-    let src_hashes = dbg!(get_hashes_map(&file_sys, src_paths));
-
     let dst_paths: Vec<PathBuf> = file_sys.list_files(Path::new(&args.dst_dir)).collect();
-    let dst_hashes = dbg!(get_hashes_map(&file_sys, dst_paths));
 
-    let file_plan = dbg!(plan_file_movements(&args.dst_dir, &src_hashes, &dst_hashes));
-    let _ = execute_file_movement_plan(&mut file_sys, file_plan);
+    dbg!(&src_paths);
 
-    dbg!(file_sys.files);
-    dbg!(file_sys.operations);
+    let rows: Result<Vec<DirObj>, _> = src_paths
+        .iter()
+        .map(|path| DirObj::new(path, &file_sys))
+        .collect();
+
+    dbg!(&rows);
+    match rows {
+        Ok(rows) => {
+            let df = df![
+                "path" => rows.iter().map(|r| r.path.clone()).collect::<Vec<_>>(),
+                "basename" => rows.iter().map(|r| r.basename.clone()).collect::<Vec<_>>(),
+                "dir" => rows.iter().map(|r| r.dir.clone()).collect::<Vec<_>>(),
+                "hash" => rows.iter().map(|r| r.hash.clone()).collect::<Vec<_>>(),
+                "size" => rows.iter().map(|r| r.size).collect::<Vec<_>>(),
+            ];
+            dbg!(df);
+        }
+        _ => {
+            eprintln!("failed to parse df");
+        }
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+struct DirObj {
+    path: String,
+    basename: String,
+    dir: String,
+    hash: String,
+    size: u64,
+}
+
+impl DirObj {
+    fn new(
+        path: impl AsRef<Path>,
+        file_sys: &impl FileSystem,
+    ) -> Result<DirObj, Box<dyn std::error::Error>> {
+        let path = path.as_ref();
+
+        let full_path = path.to_string_lossy().into_owned();
+
+        let basename = path
+            .file_name()
+            .ok_or("Missing file name in path")?
+            .to_string_lossy()
+            .into_owned();
+
+        let dir = path
+            .parent()
+            .ok_or("Missing directory in path")?
+            .to_string_lossy()
+            .into_owned();
+
+        let hash = file_sys.hash_file(&path)?;
+        let size = file_sys.size(&path)?;
+
+        Ok(DirObj {
+            path: full_path,
+            basename,
+            dir,
+            hash,
+            size,
+        })
+    }
 }
 
 // cli stuff
