@@ -96,6 +96,8 @@ impl DirObj {
             size,
         })
     }
+
+    fn to_df() {}
 }
 
 // cli stuff
