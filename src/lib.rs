@@ -1,8 +1,10 @@
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::error::Error;
+use std::hash::Hash;
 use std::io::Read;
-use std::path::Path;
-use std::{fs, io, path::PathBuf};
+use std::path::{Path, PathBuf};
+use std::{fs, io};
 use walkdir::WalkDir;
 
 pub trait FileSystem {
@@ -143,4 +145,117 @@ impl FileSystem for FakeFileSystem {
             Err(io::Error::new(io::ErrorKind::NotFound, "File not found"))
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Blob {
+    pub path: PathBuf,
+    pub basename: PathBuf,
+    pub dir: PathBuf,
+    hash: String,
+    pub id: String,
+    size: u64,
+}
+
+impl Blob {
+    fn new(path: &PathBuf, file_sys: &impl FileSystem) -> Result<Blob, Box<dyn std::error::Error>> {
+        let basename: PathBuf = path.file_name().ok_or("Missing file name in path")?.into();
+        let dir: PathBuf = path.parent().ok_or("Missing directory in path")?.into();
+
+        let hash = file_sys.hash_file(&path)?;
+        let size = file_sys.size(&path)?;
+        let id = format!(
+            "{}-{}-{}",
+            basename.to_string_lossy().into_owned(),
+            hash,
+            size
+        );
+        Ok(Blob {
+            path: path.to_path_buf(),
+            basename,
+            dir,
+            hash,
+            id,
+            size,
+        })
+    }
+}
+
+pub fn paths_to_blobs(
+    paths: &Vec<PathBuf>,
+    file_sys: &impl FileSystem,
+) -> Result<Vec<Blob>, Box<dyn Error>> {
+    paths.iter().map(|path| Blob::new(path, file_sys)).collect()
+}
+
+/// Creates a `HashMap` from a collection of items, keyed by a field extracted via `key_fn`.
+pub fn struct_to_hashmap<K, T, I, F>(items: I, key_fn: F) -> HashMap<K, T>
+where
+    K: Eq + Hash,
+    I: IntoIterator<Item = T>,
+    F: Fn(&T) -> K,
+{
+    let mut map = HashMap::new();
+    for item in items {
+        let key = key_fn(&item);
+        map.insert(key, item);
+    }
+    map
+}
+
+#[derive(Debug)]
+pub enum FileOp {
+    CopyFile {
+        src_path: PathBuf,
+        dst_path: PathBuf,
+    },
+    DeleteFile {
+        path: PathBuf,
+    },
+}
+
+pub fn plan_file_movements(
+    dst_dir: &PathBuf,
+    src_map: &HashMap<&String, &Blob>,
+    dst_map: &HashMap<&String, &Blob>,
+) -> Vec<FileOp> {
+    let mut file_ops = Vec::new();
+
+    for (key, blob) in src_map {
+        match dst_map.get(key) {
+            Some(_) => {}
+            None => {
+                file_ops.push(FileOp::CopyFile {
+                    src_path: blob.path.clone(),
+                    dst_path: PathBuf::from(dst_dir).join(blob.basename.clone()),
+                });
+            }
+        }
+    }
+
+    for (key, blob) in dst_map {
+        match src_map.get(key) {
+            Some(_) => {}
+            None => {
+                file_ops.push(FileOp::DeleteFile {
+                    path: blob.path.clone(),
+                });
+            }
+        }
+    }
+    file_ops
+}
+
+pub fn execute_file_movement_plan(
+    file_sys: &mut impl FileSystem,
+    file_plan: Vec<FileOp>,
+) -> Result<(), io::Error> {
+    for op in file_plan {
+        match op {
+            FileOp::CopyFile { src_path, dst_path } => file_sys.copy_file(&src_path, &dst_path),
+            FileOp::DeleteFile { path } => file_sys.delete_file(&path),
+        }
+        .expect("{op} operation failed");
+    }
+    Ok(())
 }
