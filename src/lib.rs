@@ -183,7 +183,7 @@ impl Blob {
 
 pub fn paths_to_blobs(
     paths: &Vec<PathBuf>,
-    file_sys: &impl FileSystem,
+    file_sys: &mut impl FileSystem,
 ) -> Result<Vec<Blob>, Box<dyn Error>> {
     paths.iter().map(|path| Blob::new(path, file_sys)).collect()
 }
@@ -203,6 +203,12 @@ where
     map
 }
 
+pub fn get_struct_map(root_dir: &PathBuf, file_sys: &mut impl FileSystem) -> HashMap<String, Blob> {
+    let paths: Vec<PathBuf> = file_sys.list_files(Path::new(root_dir)).collect();
+    let blobs = paths_to_blobs(&paths, file_sys).expect("Failed to parse blobs");
+    struct_to_hashmap(blobs, |s| s.id.clone())
+}
+
 #[derive(Debug)]
 pub enum FileOp {
     CopyFile {
@@ -216,8 +222,8 @@ pub enum FileOp {
 
 pub fn plan_file_movements(
     dst_dir: &PathBuf,
-    src_map: &HashMap<&String, &Blob>,
-    dst_map: &HashMap<&String, &Blob>,
+    src_map: &HashMap<String, Blob>,
+    dst_map: &HashMap<String, Blob>,
 ) -> Vec<FileOp> {
     let mut file_ops = Vec::new();
 

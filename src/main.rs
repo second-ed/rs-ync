@@ -1,6 +1,6 @@
 use hash_files::{
-    execute_file_movement_plan, paths_to_blobs, plan_file_movements, struct_to_hashmap,
-    FakeFileSystem, FileSystem,
+    execute_file_movement_plan, get_struct_map, paths_to_blobs, plan_file_movements,
+    struct_to_hashmap, FakeFileSystem, FileSystem,
 };
 use std::path::{Path, PathBuf};
 use std::{env, fmt};
@@ -26,13 +26,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         file_sys.files.insert(name.into(), content.to_string());
     }
 
-    let src_paths: Vec<PathBuf> = file_sys.list_files(Path::new(&args.src_dir)).collect();
-    let src_blobs = paths_to_blobs(&src_paths, &file_sys).expect("Failed to parse blobs");
-    let src_map = struct_to_hashmap(&src_blobs, |s| &s.id);
-
-    let dst_paths: Vec<PathBuf> = file_sys.list_files(Path::new(&args.dst_dir)).collect();
-    let dst_blobs = paths_to_blobs(&dst_paths, &file_sys).expect("Failed to parse blobs");
-    let dst_map = struct_to_hashmap(&dst_blobs, |s| &s.id);
+    let src_map = get_struct_map(&args.src_dir, &mut file_sys);
+    let dst_map = get_struct_map(&args.dst_dir, &mut file_sys);
 
     let ops_plan = plan_file_movements(&args.dst_dir, &src_map, &dst_map);
     let _ = execute_file_movement_plan(&mut file_sys, ops_plan);
