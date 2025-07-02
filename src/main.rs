@@ -1,39 +1,19 @@
-use hash_files::{
-    execute_file_movement_plan, get_struct_map, paths_to_blobs, plan_file_movements,
-    struct_to_hashmap, FakeFileSystem, FileSystem,
-};
-use std::path::{Path, PathBuf};
-use std::{env, fmt};
+use hash_files::{execute_file_movement_plan, get_struct_map, plan_file_movements, RealFileSystem};
+use std::{env, fmt, path::PathBuf};
 use text_colorizer::Colorize;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::new();
 
-    let mut file_sys = FakeFileSystem::new();
-
-    let values = vec![
-        ("main__dir/file_1.txt", "hey"),
-        ("main__dir/file_2.txt", "hello"),
-        ("main__dir/file_3.txt", "world"),
-        ("main__dir/some_file.rs", "let mut thing = Vec::new()"),
-        ("other_dir/file4.rs", "let x = 4;"),
-        ("other_dir/file_5.txt", "hello"),
-        ("other_dir/file_7.txt", "hello"),
-        ("other_dir/file_2.txt", "hello"),
-    ];
-
-    for (name, content) in values {
-        file_sys.files.insert(name.into(), content.to_string());
-    }
-
+    let mut file_sys = RealFileSystem;
     let src_map = get_struct_map(&args.src_dir, &mut file_sys);
     let dst_map = get_struct_map(&args.dst_dir, &mut file_sys);
 
     let ops_plan = plan_file_movements(&args.dst_dir, &src_map, &dst_map);
-    let _ = execute_file_movement_plan(&mut file_sys, ops_plan);
+    // let _ = execute_file_movement_plan(&mut file_sys, ops_plan);
 
-    dbg!(file_sys.files);
-    dbg!(file_sys.operations);
+    dbg!(ops_plan);
+    // dbg!(file_sys.operations);
 
     Ok(())
 }

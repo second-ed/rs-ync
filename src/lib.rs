@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::error::Error;
@@ -5,7 +6,6 @@ use std::hash::Hash;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use walkdir::WalkDir;
 
 pub trait FileSystem {
     fn list_files<'a>(
@@ -27,11 +27,11 @@ impl FileSystem for RealFileSystem {
         path: &'a Path,
     ) -> Box<dyn Iterator<Item = std::path::PathBuf> + 'a> {
         Box::new(
-            WalkDir::new(path)
+            fs::read_dir(path)
                 .into_iter()
-                .filter_map(Result::ok)
-                .filter(|e| e.file_type().is_file())
-                .map(|e| e.path().to_path_buf()),
+                .flat_map(|it| it.filter_map(Result::ok))
+                .filter(|e| e.file_type().map(|ft| ft.is_file()).unwrap_or(false))
+                .map(|e| e.path()),
         )
     }
 
@@ -227,7 +227,8 @@ pub fn plan_file_movements(
 ) -> Vec<FileOp> {
     let mut file_ops = Vec::new();
 
-    for (key, blob) in src_map {
+    for key in src_map.keys().sorted() {
+        let blob = src_map.get(key).expect("expected key not in src_map");
         match dst_map.get(key) {
             Some(_) => {}
             None => {
@@ -239,7 +240,8 @@ pub fn plan_file_movements(
         }
     }
 
-    for (key, blob) in dst_map {
+    for key in dst_map.keys().sorted() {
+        let blob = dst_map.get(key).expect("expected key not in dst_map");
         match src_map.get(key) {
             Some(_) => {}
             None => {
