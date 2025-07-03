@@ -1,4 +1,4 @@
-use hash_files::{execute_file_movement_plan, get_struct_map, plan_file_movements, RealFileSystem};
+use rs_ync::{execute_file_movement_plan, get_struct_map, plan_file_movements, RealFileSystem};
 use std::{env, fmt, path::PathBuf};
 use text_colorizer::Colorize;
 

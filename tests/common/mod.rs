@@ -1,4 +1,4 @@
-use hash_files::FakeFileSystem;
+use rs_ync::FakeFileSystem;
 
 pub fn setup_fake_fs() -> FakeFileSystem {
     let mut file_sys = FakeFileSystem::new();
