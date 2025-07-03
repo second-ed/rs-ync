@@ -1,4 +1,7 @@
-use rs_ync::{execute_file_movement_plan, get_struct_map, plan_file_movements, RealFileSystem};
+use rs_ync::{
+    execute_file_movement_plan, get_input, get_struct_map, plan_file_movements, RealFileSystem,
+};
+use std::io::{self, Write};
 use std::{env, fmt, path::PathBuf};
 use text_colorizer::Colorize;
 
@@ -10,10 +13,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dst_map = get_struct_map(&args.dst_dir, &mut file_sys);
 
     let ops_plan = plan_file_movements(&args.dst_dir, &src_map, &dst_map);
-    // let _ = execute_file_movement_plan(&mut file_sys, ops_plan);
 
-    dbg!(ops_plan);
-    // dbg!(file_sys.operations);
+    dbg!(&ops_plan);
+    get_input("execute file movement plan [Y/N]: ");
+    let _ = execute_file_movement_plan(&mut file_sys, ops_plan);
 
     Ok(())
 }

@@ -2,10 +2,12 @@ use itertools::Itertools;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::error::Error;
+use std::fs;
 use std::hash::Hash;
-use std::io::Read;
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
-use std::{fs, io};
+use std::{env, fmt};
+use text_colorizer::Colorize;
 
 pub trait FileSystem {
     fn list_files<'a>(
@@ -61,7 +63,7 @@ impl FileSystem for RealFileSystem {
         Ok(format!("{:x}", hasher.finalize()))
     }
     fn size(&self, path: &Path) -> std::io::Result<u64> {
-        let metadata = fs::metadata(&path)?;
+        let metadata = fs::metadata(path)?;
         Ok(metadata.len())
     }
 }
@@ -77,6 +79,11 @@ impl FakeFileSystem {
             files: HashMap::new(),
             operations: Vec::new(),
         }
+    }
+}
+impl Default for FakeFileSystem {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -158,12 +165,12 @@ pub struct Blob {
 }
 
 impl Blob {
-    fn new(path: &PathBuf, file_sys: &impl FileSystem) -> Result<Blob, Box<dyn std::error::Error>> {
+    fn new(path: &Path, file_sys: &impl FileSystem) -> Result<Blob, Box<dyn std::error::Error>> {
         let basename: PathBuf = path.file_name().ok_or("Missing file name in path")?.into();
         let dir: PathBuf = path.parent().ok_or("Missing directory in path")?.into();
 
-        let hash = file_sys.hash_file(&path)?;
-        let size = file_sys.size(&path)?;
+        let hash = file_sys.hash_file(path)?;
+        let size = file_sys.size(path)?;
         let id = format!(
             "{}-{}-{}",
             basename.to_string_lossy().into_owned(),
@@ -182,7 +189,7 @@ impl Blob {
 }
 
 pub fn paths_to_blobs(
-    paths: &Vec<PathBuf>,
+    paths: &[PathBuf],
     file_sys: &mut impl FileSystem,
 ) -> Result<Vec<Blob>, Box<dyn Error>> {
     paths.iter().map(|path| Blob::new(path, file_sys)).collect()
@@ -207,6 +214,25 @@ pub fn get_struct_map(root_dir: &PathBuf, file_sys: &mut impl FileSystem) -> Has
     let paths: Vec<PathBuf> = file_sys.list_files(Path::new(root_dir)).collect();
     let blobs = paths_to_blobs(&paths, file_sys).expect("Failed to parse blobs");
     struct_to_hashmap(blobs, |s| s.id.clone())
+}
+
+pub fn get_input(prompt: &str) {
+    print!("{}", prompt.bold().yellow());
+    io::stdout().flush().unwrap();
+
+    let mut input = String::new();
+    if io::stdin().read_line(&mut input).is_err() {
+        eprintln!("{}", "error reading input".bold().red());
+        std::process::exit(1);
+    }
+
+    match input.trim() {
+        "Y" => {}
+        _ => {
+            eprintln!("{}", "invalid selection".bold().red());
+            std::process::exit(1);
+        }
+    }
 }
 
 #[derive(Debug)]
