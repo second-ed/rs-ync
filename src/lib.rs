@@ -6,7 +6,6 @@ use std::fs;
 use std::hash::Hash;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
-use std::{env, fmt};
 use text_colorizer::Colorize;
 
 pub trait FileSystem {
