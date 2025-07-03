@@ -1,3 +1,4 @@
+use indicatif::ProgressBar;
 use itertools::Itertools;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -225,10 +226,12 @@ pub fn get_input(prompt: &str) {
         std::process::exit(1);
     }
 
-    match input.trim() {
+    let input = input.trim();
+
+    match input.to_ascii_uppercase().as_str() {
         "Y" => {}
         _ => {
-            eprintln!("{}", "invalid selection".bold().red());
+            eprintln!("{}: `{}`", "invalid selection".bold().red(), input);
             std::process::exit(1);
         }
     }
@@ -283,12 +286,15 @@ pub fn execute_file_movement_plan(
     file_sys: &mut impl FileSystem,
     file_plan: Vec<FileOp>,
 ) -> Result<(), io::Error> {
+    let bar = ProgressBar::new(file_plan.len().try_into().unwrap());
     for op in file_plan {
         match op {
             FileOp::CopyFile { src_path, dst_path } => file_sys.copy_file(&src_path, &dst_path),
             FileOp::DeleteFile { path } => file_sys.delete_file(&path),
         }
         .expect("{op} operation failed");
+        bar.inc(1);
     }
+    bar.finish();
     Ok(())
 }
