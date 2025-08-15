@@ -1,7 +1,6 @@
 use rs_ync::{
-    execute_file_movement_plan, get_input, get_struct_map, plan_file_movements, RealFileSystem,
+    RealFileSystem, execute_file_movement_plan, get_input, get_struct_map, plan_file_movements,
 };
-use std::io::{self, Write};
 use std::{env, fmt, path::PathBuf};
 use text_colorizer::Colorize;
 
@@ -59,6 +58,7 @@ impl fmt::Display for Args {
     }
 }
 
+#[allow(dead_code)]
 fn print_type_of<T>(_: &T) {
     println!("{}", std::any::type_name::<T>());
 }
