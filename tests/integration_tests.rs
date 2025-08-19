@@ -1,4 +1,4 @@
-use rs_ync::{execute_file_movement_plan, get_struct_map, plan_file_movements};
+use rs_ync::{Args, execute_rsync};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -6,16 +6,13 @@ mod common;
 
 #[test]
 fn test_edge_to_edge() {
-    let src_dir: PathBuf = PathBuf::from("dir");
-    let dst_dir: PathBuf = PathBuf::from("other_dir");
-
     let mut file_sys = common::setup_fake_fs();
 
-    let src_map = get_struct_map(&src_dir, &mut file_sys);
-    let dst_map = get_struct_map(&dst_dir, &mut file_sys);
-
-    let ops_plan = plan_file_movements(&dst_dir, &src_map, &dst_map);
-    let _ = execute_file_movement_plan(&mut file_sys, ops_plan);
+    let args = Args {
+        src_dir: PathBuf::from("dir"),
+        dst_dir: PathBuf::from("other_dir"),
+    };
+    let _ = execute_rsync(args, &mut file_sys);
 
     let expected_result = HashMap::from([
         (PathBuf::from("other_dir/file_1.txt"), String::from("hey")),

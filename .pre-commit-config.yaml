@@ -54,4 +54,3 @@ repos:
           - py,rs,md,yaml,toml,lock
           - --ignore-dirs
           - .venv,target,.git
-          # - --ignore-hidden

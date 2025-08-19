@@ -305,8 +305,8 @@ pub fn execute_rsync(args: Args, file_sys: &mut impl FileSystem) -> Result<(), i
 // cli stuff
 #[derive(Debug)]
 pub struct Args {
-    src_dir: PathBuf,
-    dst_dir: PathBuf,
+    pub src_dir: PathBuf,
+    pub dst_dir: PathBuf,
 }
 
 impl Args {
