@@ -1,0 +1,10 @@
+[project]
+name = "rs-ync"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pre-commit>=4.3.0",
+    "repo-mapper-rs>=0.3.0",
+]

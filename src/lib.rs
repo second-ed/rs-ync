@@ -1,12 +1,15 @@
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
-use std::error::Error;
-use std::fs;
-use std::hash::Hash;
-use std::io::{self, Read, Write};
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    env,
+    error::Error,
+    fmt, fs,
+    hash::Hash,
+    io::{self, Read, Write},
+    path::{Path, PathBuf},
+};
 use text_colorizer::Colorize;
 
 pub trait FileSystem {
@@ -165,9 +168,21 @@ pub struct Blob {
 }
 
 impl Blob {
-    fn new(path: &Path, file_sys: &impl FileSystem) -> Result<Blob, Box<dyn std::error::Error>> {
-        let basename: PathBuf = path.file_name().ok_or("Missing file name in path")?.into();
-        let dir: PathBuf = path.parent().ok_or("Missing directory in path")?.into();
+    fn new(path: &Path, file_sys: &impl FileSystem) -> Result<Blob, io::Error> {
+        let basename: PathBuf = path
+            .file_name()
+            .ok_or(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "basename operation failed",
+            ))?
+            .into();
+        let dir: PathBuf = path
+            .parent()
+            .ok_or(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "parent operation failed",
+            ))?
+            .to_path_buf();
 
         let hash = file_sys.hash_file(path)?;
         let size = file_sys.size(path)?;
@@ -191,7 +206,7 @@ impl Blob {
 pub fn paths_to_blobs(
     paths: &[PathBuf],
     file_sys: &mut impl FileSystem,
-) -> Result<Vec<Blob>, Box<dyn Error>> {
+) -> Result<Vec<Blob>, io::Error> {
     paths.iter().map(|path| Blob::new(path, file_sys)).collect()
 }
 
@@ -212,29 +227,8 @@ where
 
 pub fn get_struct_map(root_dir: &PathBuf, file_sys: &mut impl FileSystem) -> HashMap<String, Blob> {
     let paths: Vec<PathBuf> = file_sys.list_files(Path::new(root_dir)).collect();
-    let blobs = paths_to_blobs(&paths, file_sys).expect("Failed to parse blobs");
+    let blobs: Vec<Blob> = paths_to_blobs(&paths, file_sys).expect("Failed to parse blobs");
     struct_to_hashmap(blobs, |s| s.id.clone())
-}
-
-pub fn get_input(prompt: &str) {
-    print!("{}", prompt.bold().yellow());
-    io::stdout().flush().unwrap();
-
-    let mut input = String::new();
-    if io::stdin().read_line(&mut input).is_err() {
-        eprintln!("{}", "error reading input".bold().red());
-        std::process::exit(1);
-    }
-
-    let input = input.trim();
-
-    match input.to_ascii_uppercase().as_str() {
-        "Y" => {}
-        _ => {
-            eprintln!("{}: `{}`", "invalid selection".bold().red(), input);
-            std::process::exit(1);
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -297,4 +291,57 @@ pub fn execute_file_movement_plan(
     }
     bar.finish();
     Ok(())
+}
+
+pub fn execute_rsync(args: Args, file_sys: &mut impl FileSystem) -> Result<(), io::Error> {
+    let src_map = get_struct_map(&args.src_dir, file_sys);
+    let dst_map = get_struct_map(&args.dst_dir, file_sys);
+
+    let ops_plan = plan_file_movements(&args.dst_dir, &src_map, &dst_map);
+
+    execute_file_movement_plan(file_sys, ops_plan)
+}
+
+// cli stuff
+#[derive(Debug)]
+pub struct Args {
+    src_dir: PathBuf,
+    dst_dir: PathBuf,
+}
+
+impl Args {
+    pub fn new() -> Args {
+        let args: Vec<String> = env::args().skip(1).collect();
+
+        if args.len() != 2 {
+            eprintln!("{} - rsync for two directories", "rs-ync".green());
+            eprintln!("Usage: rs-ync `<SRC>` `<DST>`");
+            eprintln!(
+                "{} wrong number of args: expected 2 got {}. ",
+                "Error:".bold().red(),
+                args.len()
+            );
+            std::process::exit(1);
+        }
+        Args {
+            src_dir: PathBuf::from(args[0].clone()),
+            dst_dir: PathBuf::from(args[1].clone()),
+        }
+    }
+}
+
+impl Default for Args {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Display for Args {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "src_dir: {:?} | dst_dir: {:?}",
+            self.src_dir, self.dst_dir
+        )
+    }
 }
